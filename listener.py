@@ -5,9 +5,13 @@ from vosk import Model, KaldiRecognizer  # Vosk speech recognition
 import sys
 import numpy as np
 import threading
+import keyboard
 
 stop_listening = False  # Flag to tell the callback to stop
 
+pause_listening = False # stop taking data in
+
+latest_text = ""
 
 # Sampling rate — common mic rates are 16000 or 44100 Hz
 SAMPLE_RATE = 16000
@@ -32,8 +36,11 @@ else:
 
 # This function is called automatically for each chunk of audio
 def callback(indata, frames, time, status):
+    global latest_text # file to give chatgpt
     if stop_listening:
         raise sd.CallbackStop()  # Stops the stream
+    if pause_listening:
+        return  # skip processing audio while paus
     # indata is a numpy array of audio samples
     # Convert float32 to int16 if needed (Vosk expects int16)
     indata_int16 = (indata * 32767).astype('int16') if indata.dtype == 'float32' else indata
@@ -41,10 +48,28 @@ def callback(indata, frames, time, status):
     # Feed audio to Vosk
     if rec.AcceptWaveform(indata_int16.tobytes()):
         # True = Vosk has a finalized recognition result
-        print(json.loads(rec.Result())["text"])
+        #print(json.loads(rec.Result())["text"])
+        latest_text = json.loads(rec.Result())["text"]
+        print("\nFinalized:", latest_text)  # new line so it’s not overwritten
     else:
         # Partial result while speaking
-        print(json.loads(rec.PartialResult())["partial"])
+        #print(json.loads(rec.PartialResult())["partial"])
+        latest_text = json.loads(rec.PartialResult())["partial"]
+        print(latest_text, end='\r', flush=True)  # overwrite line for real-time partial
+    
+    
+
+def spacebar_listener():
+    global pause_listening
+    while not stop_listening:
+        if keyboard.is_pressed("space"):
+            pause_listening = not pause_listening
+            print("\nPaused" if pause_listening else "\nResumed", flush=True)
+            while keyboard.is_pressed("space"):
+                pass  # wait until key is released to prevent multiple toggles
+
+keyboard_thread = threading.Thread(target=spacebar_listener, daemon=True)
+keyboard_thread.start()
 
 def listen():
     # Open input stream from your mic
@@ -58,8 +83,7 @@ def listen():
         
         print("Listening to microphone...")
         while not stop_listening:
-            sd.sleep(100)  # sleep 100 ms at a time  # Just a very long sleep; stream ends when callback raises CallbackStop
-
+            sd.sleep(100)  # sleep 100 ms at a time  
 # Run the listener in a thread so main thread can wait for user input
 listener_thread = threading.Thread(target=listen)
 listener_thread.start()
