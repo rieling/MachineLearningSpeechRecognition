@@ -10,7 +10,7 @@ requirements.txt
 2. Download a Vosk model (e.g., `vosk-model-en-us-0.22`) and put it in a local folder.  
 
 3. Update the path in `listener.py`:
-```python
+python
 model = Model("C:/path/to/vosk-model-en-us-0.22")
 
 4. Run the Script
